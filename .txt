@@ -1,0 +1,189 @@
+
+	let elemChat: HTMLElement;
+	let currentMessage = '';
+	let username = ''; // Added username input field
+
+	// Initialize with an empty message feed
+	let messageFeed: ChatMessage[] = [];
+	interface ChatMessage {
+		username: string;
+		message: string;
+		timestamp: string;
+		host: boolean;
+		name: string;
+		color: string;
+		room: string;
+		image?: string; // Include an optional image property for handling images
+		pdf?: string; // Include an optional pdf property for handling PDFs
+	}
+
+	let socket: Socket;
+
+	onMount(() => {
+		socket = io('http://localhost:3000');
+
+		// Listen for 'chat message' event from the server
+		socket.on('chat message', (message) => {
+			messageFeed = [...messageFeed, message];
+			scrollChatBottom('smooth');
+		});
+		generateBotMessage();
+	});
+
+	function addMessage(): void {
+		if (currentMessage.trim() !== '' || imageFile || pdfFile) {
+			// Check if there's text, an image, or a PDF
+			let newMessage: ChatMessage;
+
+			if (imageFile) {
+				// If an image is selected, create a new message object with the image
+				newMessage = {
+					username,
+					message: '', // Clear the message field for image-only messages
+					timestamp: new Date().toLocaleString(),
+					host: true,
+					name: username,
+					color: '',
+					room: selectedRoom,
+					image: URL.createObjectURL(imageFile) // Create a URL for the selected image
+				};
+				// Emit 'chat message' event to the server with the new message containing the image
+				socket.emit('chat message', newMessage);
+				imageFile = null; // Reset the imageFile variable after sending
+			} else if (pdfFile) {
+				// If a PDF is selected, create a new message object with the PDF
+				newMessage = {
+					username,
+					message: '', // Clear the message field for PDF-only messages
+					timestamp: new Date().toLocaleString(),
+					host: true,
+					name: username,
+					color: '',
+					room: selectedRoom,
+					pdf: URL.createObjectURL(pdfFile) // Create a URL for the selected PDF
+				};
+				// Emit 'chat message' event to the server with the new message containing the PDF
+				socket.emit('chat message', newMessage);
+				pdfFile = null; // Reset the pdfFile variable after sending
+			} else {
+				// If it's a text message
+				newMessage = {
+					username,
+					message: currentMessage,
+					timestamp: new Date().toLocaleString(),
+					host: true,
+					name: username,
+					color: '',
+					room: selectedRoom
+				};
+				// Emit 'chat message' event to the server with the new message containing text
+				socket.emit('chat message', newMessage);
+			}
+
+			currentMessage = ''; // Clear the message input field
+		}
+	}
+
+	let showChat = false; // Initially, don't show the chat interface
+	let joinedUsers: string[] = [];
+
+	function startChat(): void {
+		if (username.trim() !== '' && selectedRoom !== '') {
+			showChat = true;
+			joinedUsers = [...joinedUsers, username];
+		}
+	}
+
+	let selectedRoom = ''; // Variable to store the selected room
+
+	// Function to join the chat room
+	function joinChatRoom(room: string): void {
+		if (username.trim() !== '' && room !== '') {
+			selectedRoom = room;
+			startChat();
+		}
+	}
+
+	let imageFile: File | null = null; // Declare imageFile as File or null
+	let isFileSelected = false;
+
+	function handleImageUpload(event: Event): void {
+		const target = event.target as HTMLInputElement;
+		if (target?.files && target.files[0]) {
+			imageFile = target.files[0];
+			isFileSelected = true;
+		}
+	}
+
+	let pdfFile: File | null = null; // Declare pdfFile as File or null
+	function handlePDFUpload(event: Event): void {
+		const target = event.target as HTMLInputElement;
+		if (target?.files && target.files[0]) {
+			pdfFile = target.files[0];
+			isFileSelected = true;
+		}
+	}
+
+	function scrollChatBottom(behavior?: ScrollBehavior): void {
+		elemChat.scrollTo({ top: elemChat.scrollHeight, behavior });
+	}
+	function leaveChat(): void {
+		// Clear all messages from the selected room
+		messageFeed = messageFeed.filter((message) => message.room !== selectedRoom);
+
+		// Remove the current user from the list of joined users
+		joinedUsers = joinedUsers.filter((user) => user !== username);
+
+		// Clear the selected room
+		selectedRoom = '';
+
+		// Hide the chat interface
+		showChat = false;
+	}
+
+	let showBotMessage = false;
+
+	function generateBotMessage() {
+		const botMessage: ChatMessage = {
+			username: 'Bot',
+			message: ' Hey ! Do you want to know something about me ?',
+			timestamp: new Date().toLocaleString(),
+			host: true,
+			name: 'Bot',
+			color: '',
+			room: selectedRoom
+		};
+
+		messageFeed = [...messageFeed, botMessage];
+		showBotMessage = true;
+	}
+
+	let showBotResponse = false; // Variable to track showing additional app information
+
+	// Function to handle the user's response to the bot message
+	// Function to handle the user's response to the bot message
+	function handleBotResponse(response: string) {
+		console.log('User responded:', response);
+
+		if (response === 'Yes') {
+			// Show more information about the app if the user responded positively
+			showBotMessage = false; // Hide the bot message prompt
+			showBotResponse = true; // Show additional information about the app
+		} else if (response === 'No') {
+			// Hide the bot message if the user responded negatively
+			showBotMessage = false;
+		}
+	}
+
+	let showBotNextMessage = false; // Variable to track showing the next bot message
+
+	function handleNext() {
+		showBotResponse = false; // Hide the current bot response message
+		showBotNextMessage = true; // Show the next bot message
+	}
+
+	function handleOK() {
+		// You can perform any action when the 'OK' button is clicked
+		// For example, hide the 'OK' message or perform a specific task
+		showBotNextMessage = false; // Hide the 'OK' message
+	}
